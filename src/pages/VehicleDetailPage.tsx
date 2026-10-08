@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Gauge, Plus, Wrench } from 'lucide-react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, Fuel, Gauge, Plus, Wrench } from 'lucide-react'
 import { useVehicleDetail } from '../hooks/useVehicleDetail'
 import { archiveMaintenance, createMaintenance, updateMaintenance } from '../services/maintenance'
 import { setVehicleMileage } from '../services/vehicles'
@@ -12,12 +12,22 @@ import Alert from '../components/Alert'
 import MaintenanceForm from '../components/MaintenanceForm'
 import MaintenanceList from '../components/MaintenanceList'
 import UpcomingList from '../components/UpcomingList'
+import ConfirmDialog from '../components/ConfirmDialog'
+import FuelSection from '../components/FuelSection'
 
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: MaintenanceRecord }
+type Tab = 'maintenance' | 'fuel'
+
+const TABS: { id: Tab; label: string; icon: typeof Wrench }[] = [
+  { id: 'maintenance', label: 'Mantenimiento', icon: Wrench },
+  { id: 'fuel', label: 'Combustible', icon: Fuel },
+]
 
 export default function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { vehicle, records, loading, notFound, error, reload } = useVehicleDetail(id)
+  const { vehicle, records, fuelRecords, loading, notFound, error, reload } = useVehicleDetail(id)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab: Tab = searchParams.get('tab') === 'fuel' ? 'fuel' : 'maintenance'
 
   const [form, setForm] = useState<FormState>({ mode: 'closed' })
   const [toArchive, setToArchive] = useState<MaintenanceRecord | null>(null)
@@ -26,6 +36,12 @@ export default function VehicleDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const closeForm = useCallback(() => setForm({ mode: 'closed' }), [])
+
+  function selectTab(next: Tab) {
+    setNotice(null)
+    setActionError(null)
+    setSearchParams(next === 'fuel' ? { tab: 'fuel' } : {}, { replace: true })
+  }
 
   const totals = useMemo(() => summarize(records), [records])
   const history = useMemo(() => sortHistory(records), [records])
@@ -105,115 +121,137 @@ export default function VehicleDetailPage() {
         <Link to="/app/vehicles" className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:underline">
           <ArrowLeft className="h-4 w-4" aria-hidden /> Vehículos
         </Link>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-pine-900 sm:text-3xl">
-              {vehicle.brand} {vehicle.model}
-            </h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-pine-600">
-              <span>{VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.year}</span>
-              <span className="rounded-lg bg-pine-50 px-2 py-0.5 text-xs font-bold tracking-wider text-pine-800">{vehicle.license_plate}</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-pine-800">
-                <Gauge className="h-4 w-4 text-emerald-600" aria-hidden />
-                {formatKm(vehicle.current_mileage)}
-              </span>
-            </p>
-          </div>
-          <button type="button" className="btn-primary" onClick={() => { setNotice(null); setForm({ mode: 'create' }) }}>
-            <Plus className="h-4 w-4" aria-hidden />
-            Registrar mantenimiento
-          </button>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-pine-900 sm:text-3xl">
+            {vehicle.brand} {vehicle.model}
+          </h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-pine-600">
+            <span>{VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.year}</span>
+            <span className="rounded-lg bg-pine-50 px-2 py-0.5 text-xs font-bold tracking-wider text-pine-800">{vehicle.license_plate}</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-pine-800">
+              <Gauge className="h-4 w-4 text-emerald-600" aria-hidden />
+              {formatKm(vehicle.current_mileage)}
+            </span>
+          </p>
         </div>
+      </div>
+
+      <div role="tablist" aria-label="Secciones del vehículo" className="flex gap-1 border-b border-pine-100">
+        {TABS.map(({ id: tabId, label, icon: Icon }) => (
+          <button
+            key={tabId}
+            type="button"
+            role="tab"
+            aria-selected={tab === tabId}
+            onClick={() => selectTab(tabId)}
+            className={`-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+              tab === tabId ? 'border-emerald-600 text-pine-900' : 'border-transparent text-pine-600 hover:text-pine-900'
+            }`}
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            {label}
+          </button>
+        ))}
       </div>
 
       {notice && <Alert kind="success">{notice}</Alert>}
       {(error || actionError) && <Alert>{error ?? actionError}</Alert>}
 
-      <section className="grid gap-4 sm:grid-cols-3" aria-label="Costos de mantenimiento">
-        <div className="card p-5">
-          <p className="text-sm font-semibold text-pine-600">Total en mantenimiento</p>
-          <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.total)}</p>
-          <p className="mt-1 text-xs text-pine-600">{totals.count} {totals.count === 1 ? 'servicio' : 'servicios'} registrados</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-sm font-semibold text-pine-600">Este año</p>
-          <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisYear)}</p>
-          <p className="mt-1 text-xs text-pine-600">Este mes: {formatMoney(totals.thisMonth)}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-sm font-semibold text-pine-600">Último servicio</p>
-          {totals.lastService ? (
-            <>
-              <p className="mt-2 truncate text-lg font-extrabold text-pine-900">{totals.lastService.service_type}</p>
-              <p className="mt-1 text-xs text-pine-600">
-                {formatDate(totals.lastService.service_date)} · {formatKm(totals.lastService.mileage)}
-              </p>
-            </>
-          ) : (
-            <p className="mt-2 text-sm text-pine-600">Aún sin registros</p>
-          )}
-        </div>
-      </section>
-
-      {upcoming.length > 0 && (
-        <section className="space-y-3" aria-label="Próximos mantenimientos">
-          <h2 className="text-lg font-bold text-pine-900">Próximos mantenimientos</h2>
-          <UpcomingList entries={upcoming.map((item) => ({ item }))} />
-        </section>
-      )}
-
-      <section className="space-y-3" aria-label="Historial de mantenimiento">
-        <h2 className="text-lg font-bold text-pine-900">Historial de mantenimiento</h2>
-        {history.length === 0 ? (
-          <div className="card flex flex-col items-center px-6 py-12 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-pine-50 text-emerald-600">
-              <Wrench className="h-6 w-6" aria-hidden />
+      {tab === 'fuel' ? (
+        <FuelSection vehicle={vehicle} records={fuelRecords} onNotice={setNotice} onError={setActionError} reload={reload} />
+      ) : (
+        <>
+          <section className="grid gap-4 sm:grid-cols-3" aria-label="Costos de mantenimiento">
+            <div className="card p-5">
+              <p className="text-sm font-semibold text-pine-600">Total en mantenimiento</p>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.total)}</p>
+              <p className="mt-1 text-xs text-pine-600">{totals.count} {totals.count === 1 ? 'servicio' : 'servicios'} registrados</p>
             </div>
-            <p className="font-semibold text-pine-900">Todavía no registraste mantenimientos</p>
-            <p className="mt-1 max-w-sm text-sm text-pine-600">
-              Anota el último servicio que recuerdes (aceite, filtros, frenos…) y define cuándo toca el siguiente.
-            </p>
-            <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
-              <Plus className="h-4 w-4" aria-hidden />
-              Registrar el primero
-            </button>
-          </div>
-        ) : (
-          <MaintenanceList
-            records={history}
-            onEdit={(record) => { setNotice(null); setForm({ mode: 'edit', record }) }}
-            onArchive={setToArchive}
-          />
-        )}
-      </section>
+            <div className="card p-5">
+              <p className="text-sm font-semibold text-pine-600">Este año</p>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisYear)}</p>
+              <p className="mt-1 text-xs text-pine-600">Este mes: {formatMoney(totals.thisMonth)}</p>
+            </div>
+            <div className="card p-5">
+              <p className="text-sm font-semibold text-pine-600">Último servicio</p>
+              {totals.lastService ? (
+                <>
+                  <p className="mt-2 truncate text-lg font-extrabold text-pine-900">{totals.lastService.service_type}</p>
+                  <p className="mt-1 text-xs text-pine-600">
+                    {formatDate(totals.lastService.service_date)} · {formatKm(totals.lastService.mileage)}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-pine-600">Aún sin registros</p>
+              )}
+            </div>
+          </section>
 
-      {form.mode !== 'closed' && (
-        <MaintenanceForm
-          key={form.mode === 'edit' ? form.record.id : 'new'}
-          vehicle={vehicle}
-          existingRecords={records}
-          record={form.mode === 'edit' ? form.record : null}
-          onSubmit={handleSubmit}
-          onClose={closeForm}
-        />
-      )}
+          {upcoming.length > 0 && (
+            <section className="space-y-3" aria-label="Próximos mantenimientos">
+              <h2 className="text-lg font-bold text-pine-900">Próximos mantenimientos</h2>
+              <UpcomingList entries={upcoming.map((item) => ({ item }))} />
+            </section>
+          )}
 
-      {toArchive && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-pine-900/40 p-4" role="alertdialog" aria-modal="true" aria-labelledby="archive-m-title">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
-            <h2 id="archive-m-title" className="text-lg font-bold text-pine-900">¿Archivar este mantenimiento?</h2>
-            <p className="mt-2 text-sm text-pine-600">
+          <section className="space-y-3" aria-label="Historial de mantenimiento">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-pine-900">Historial de mantenimiento</h2>
+              {history.length > 0 && (
+                <button type="button" className="btn-primary" onClick={() => { setNotice(null); setForm({ mode: 'create' }) }}>
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Registrar mantenimiento
+                </button>
+              )}
+            </div>
+            {history.length === 0 ? (
+              <div className="card flex flex-col items-center px-6 py-12 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-pine-50 text-emerald-600">
+                  <Wrench className="h-6 w-6" aria-hidden />
+                </div>
+                <p className="font-semibold text-pine-900">Todavía no registraste mantenimientos</p>
+                <p className="mt-1 max-w-sm text-sm text-pine-600">
+                  Anota el último servicio que recuerdes (aceite, filtros, frenos…) y define cuándo toca el siguiente.
+                </p>
+                <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Registrar el primero
+                </button>
+              </div>
+            ) : (
+              <MaintenanceList
+                records={history}
+                onEdit={(record) => { setNotice(null); setForm({ mode: 'edit', record }) }}
+                onArchive={setToArchive}
+              />
+            )}
+          </section>
+
+          {form.mode !== 'closed' && (
+            <MaintenanceForm
+              key={form.mode === 'edit' ? form.record.id : 'new'}
+              vehicle={vehicle}
+              existingRecords={records}
+              record={form.mode === 'edit' ? form.record : null}
+              onSubmit={handleSubmit}
+              onClose={closeForm}
+            />
+          )}
+
+          {toArchive && (
+            <ConfirmDialog
+              title="¿Archivar este mantenimiento?"
+              confirmLabel="Archivar"
+              busyLabel="Archivando…"
+              busy={archiving}
+              onConfirm={confirmArchive}
+              onCancel={() => setToArchive(null)}
+            >
               <strong>{toArchive.service_type}</strong> del {formatDate(toArchive.service_date)} dejará de contar en el
               historial y en los costos. No se borra de forma definitiva.
-            </p>
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button type="button" className="btn-secondary" disabled={archiving} onClick={() => setToArchive(null)}>Cancelar</button>
-              <button type="button" className="btn-danger" disabled={archiving} onClick={confirmArchive}>
-                {archiving ? 'Archivando…' : 'Archivar'}
-              </button>
-            </div>
-          </div>
-        </div>
+            </ConfirmDialog>
+          )}
+        </>
       )}
     </div>
   )

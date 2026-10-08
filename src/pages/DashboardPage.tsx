@@ -4,7 +4,9 @@ import { Car, CalendarDays, Gauge, Plus, Wallet } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useVehicles } from '../hooks/useVehicles'
 import { useAllMaintenance } from '../hooks/useAllMaintenance'
+import { useAllFuel } from '../hooks/useAllFuel'
 import { buildUpcoming, summarize } from '../lib/maintenance'
+import { summarizeFuel } from '../lib/fuel'
 import { formatKm, formatMoney } from '../lib/format'
 import Spinner from '../components/Spinner'
 import Alert from '../components/Alert'
@@ -17,17 +19,18 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const { vehicles, loading: loadingVehicles, error: vehiclesError } = useVehicles()
   const { records, loading: loadingRecords, error: recordsError } = useAllMaintenance()
+  const { records: fuelRecords, loading: loadingFuel, error: fuelError } = useAllFuel()
 
   const fullName = (user?.user_metadata?.full_name as string | undefined)?.trim()
   const firstName = fullName?.split(' ')[0]
 
-  // Solo cuentan mantenimientos de vehículos activos (no archivados)
-  const activeRecords = useMemo(() => {
-    const ids = new Set(vehicles.map((v) => v.id))
-    return records.filter((r) => ids.has(r.vehicle_id))
-  }, [vehicles, records])
+  // Solo cuentan registros de vehículos activos (no archivados)
+  const activeIds = useMemo(() => new Set(vehicles.map((v) => v.id)), [vehicles])
+  const activeRecords = useMemo(() => records.filter((r) => activeIds.has(r.vehicle_id)), [activeIds, records])
+  const activeFuel = useMemo(() => fuelRecords.filter((r) => activeIds.has(r.vehicle_id)), [activeIds, fuelRecords])
 
   const totals = useMemo(() => summarize(activeRecords), [activeRecords])
+  const fuelTotals = useMemo(() => summarizeFuel(activeFuel), [activeFuel])
 
   const upcoming = useMemo<UpcomingEntry[]>(() => {
     const entries: UpcomingEntry[] = []
@@ -46,9 +49,9 @@ export default function DashboardPage() {
       .slice(0, MAX_UPCOMING)
   }, [vehicles, activeRecords])
 
-  if (loadingVehicles || loadingRecords) return <Spinner />
+  if (loadingVehicles || loadingRecords || loadingFuel) return <Spinner />
 
-  const error = vehiclesError ?? recordsError
+  const error = vehiclesError ?? recordsError ?? fuelError
 
   return (
     <div className="space-y-8">
@@ -99,20 +102,26 @@ export default function DashboardPage() {
             <div className="card p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-pine-600">
                 <Wallet className="h-4 w-4 text-emerald-600" aria-hidden />
-                Mantenimiento este mes
+                Gasto este mes
               </div>
-              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisMonth)}</p>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisMonth + fuelTotals.thisMonth)}</p>
+              <p className="mt-1 text-xs text-pine-600">
+                Mantenimiento {formatMoney(totals.thisMonth)} · Combustible {formatMoney(fuelTotals.thisMonth)}
+              </p>
             </div>
             <div className="card p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-pine-600">
                 <CalendarDays className="h-4 w-4 text-emerald-600" aria-hidden />
-                Mantenimiento este año
+                Gasto este año
               </div>
-              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisYear)}</p>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisYear + fuelTotals.thisYear)}</p>
+              <p className="mt-1 text-xs text-pine-600">
+                Mantenimiento {formatMoney(totals.thisYear)} · Combustible {formatMoney(fuelTotals.thisYear)}
+              </p>
             </div>
           </section>
           <p className="-mt-4 text-xs text-pine-600">
-            Los montos incluyen solo mantenimientos. Combustible y otros gastos se sumarán cuando estén disponibles.
+            Los montos incluyen mantenimiento y combustible. Otros gastos (seguro, peajes, etc.) se sumarán cuando estén disponibles.
           </p>
 
           {upcoming.length > 0 ? (

@@ -32,3 +32,21 @@ export function daysBetween(fromISO: string, toISO: string): number {
   const ms = parseISODate(toISO).getTime() - parseISODate(fromISO).getTime()
   return Math.round(ms / 86_400_000)
 }
+
+const priceFormatter = new Intl.NumberFormat('es-PE', {
+  style: 'currency',
+  currency: 'PEN',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 3,
+})
+const decimalFormatter = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 2 })
+
+/** Precio unitario (hasta 3 decimales, como en los surtidores). */
+export function formatUnitPrice(value: number): string {
+  return priceFormatter.format(value)
+}
+
+/** Número con hasta 2 decimales (litros, km/l). */
+export function formatDecimal(value: number): string {
+  return decimalFormatter.format(value)
+}
