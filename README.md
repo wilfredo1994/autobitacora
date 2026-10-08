@@ -1,8 +1,10 @@
-# AutoBitácora · Sprints 1 a 3
+# AutoBitácora · Sprints 1 a 4
 
 Conoce el historial, costo y próximo mantenimiento de tu vehículo en un solo lugar.
 
 **Stack:** React + TypeScript + Vite · Tailwind CSS · React Router · Supabase (Auth + PostgreSQL + RLS) · Cloudflare Pages.
+
+**Sprint 4 (gastos + historial consolidado):** pestaña *Gastos* en el detalle del vehículo con registro, edición y archivado de otros gastos (SOAT, seguro, impuesto, peajes, etc.); pestaña *Historial* del vehículo y página `/app/history` que unen mantenimientos, combustible y gastos en una línea de tiempo por mes, con filtros por tipo y vehículo; y dashboard con el gasto del mes/año sumando los tres tipos de movimiento, más los últimos movimientos. **No requiere SQL nuevo:** la tabla `expenses`, sus policies RLS y el trigger de fecha no futura ya existen (migraciones 001 y 002).
 
 **Sprint 3 (combustible):** pestaña *Combustible* en el detalle del vehículo con registro, edición y archivado de cargas; consumo (km/l) por el método de tanque lleno a tanque lleno; costo de combustible por km; gasto total, del año y del mes; y dashboard con el gasto del mes/año sumando mantenimiento + combustible. **No requiere SQL nuevo** si ya ejecutaste la migración 002 (calcula el total de cada carga, valida el orden del kilometraje y actualiza el kilometraje del vehículo).
 
@@ -140,11 +142,11 @@ Antes de hacer `git add .`, confirma con `git status` que **`.env.local` no apar
 src/
 ├── auth/AuthProvider.tsx        sesión, signUp / signIn / signOut
 ├── components/                  ProtectedRoute, VehicleForm, VehicleCard, Alert, ...
-├── hooks/                       useVehicles, useVehicleDetail, useAllMaintenance, useAllFuel
-├── lib/                         supabase, format (fechas/moneda), maintenance y fuel (reglas de negocio)
+├── hooks/                       useVehicles, useVehicleDetail, useAllMaintenance, useAllFuel, useAllExpenses
+├── lib/                         supabase, format (fechas/moneda), maintenance, fuel, expenses e history (reglas de negocio)
 ├── layouts/AppLayout.tsx        header + navegación de la zona privada
-├── pages/                       Login, Register, Dashboard, Vehicles, VehicleDetail
-├── services/                    vehicles.ts, maintenance.ts, fuel.ts (CRUD contra Supabase)
+├── pages/                       Login, Register, Dashboard, Vehicles, VehicleDetail, History
+├── services/                    vehicles.ts, maintenance.ts, fuel.ts, expenses.ts (CRUD contra Supabase)
 └── types/app.ts                 tipos y etiquetas
 supabase/migrations/
 ├── 001_initial_schema.sql       esquema, RLS y policies
@@ -175,7 +177,7 @@ supabase/migrations/
 
 - **Próximo mantenimiento:** se toma solo el servicio *más reciente de cada tipo*. Si ya repetiste el servicio, el "próximo" anterior deja de alertar.
 - **Estados:** *Vencido* si la fecha pasó o el kilometraje actual alcanzó/superó el objetivo; *Próximo* si faltan ≤ 30 días o ≤ 500 km; *Al día* en otro caso. Si hay fecha y km, manda lo que ocurra primero.
-- **Costos:** desde el Sprint 3 el dashboard suma mantenimiento + combustible; los demás gastos se agregarán en sprints posteriores.
+- **Costos:** desde el Sprint 4 el dashboard suma mantenimiento + combustible + otros gastos.
 - Las fechas se manejan como fecha local (sin desfase de zona horaria).
 
 ## Probar el Sprint 3
@@ -199,6 +201,27 @@ supabase/migrations/
 - **Costo por km (solo combustible):** del primer al último tanque lleno (de cualquier tipo), lo pagado después del primer lleno / km recorridos. Solo se muestra con al menos dos llenos con kilometraje distinto; antes no hay historial suficiente.
 - **Total de la carga:** lo calcula la base de datos como `round(litros × precio, 2)`, así que no se puede manipular desde el cliente.
 
-## Siguiente: Sprint 4
+## Probar el Sprint 4
 
-Según el documento maestro. Las tablas `expenses` (otros gastos) y `reminders` (recordatorios) ya existen en el esquema con RLS.
+1. Abre el detalle de un vehículo y entra a la pestaña **Gastos** (`/app/vehicles/<id>?tab=expenses`).
+2. **Registrar gasto**: SOAT, fecha de hoy, S/ 95.50, kilometraje vacío. Aparece en la lista y en las tarjetas (total, año/mes y *Categoría principal*).
+3. Registra otro gasto del mismo tipo, fecha y monto: el formulario avisa de un posible duplicado (no lo bloquea).
+4. Intenta guardar un monto de 0 o una fecha futura: el formulario lo impide (la BD también rechaza fechas futuras).
+5. Entra a la pestaña **Historial**: ves mantenimientos, cargas y gastos juntos, agrupados por mes con el total de cada mes, y el costo total del vehículo con su desglose. Filtra por *Combustible* u *Otros gastos*.
+6. Haz clic en un movimiento del historial: te lleva a la pestaña donde se edita.
+7. En el menú, abre **Historial** (`/app/history`): ves los movimientos de todos tus vehículos activos; con dos o más vehículos aparece el filtro por vehículo.
+8. **Archivar** el gasto: sale de la lista, del historial y de los costos.
+9. En el **Resumen**, *Gasto este mes / año* suma mantenimiento, combustible y otros gastos, y aparecen los **Últimos movimientos**.
+10. Con un segundo usuario, `/app/history` aparece vacío (RLS).
+
+### Reglas de negocio del Sprint 4
+
+- **Categorías de gasto:** lista fija (SOAT, Seguro vehicular, Impuesto vehicular, Peajes, Estacionamiento, Lavado, Multas, Accesorios, Trámites, Otro) para que las estadísticas del Sprint 6 agrupen sin variantes de escritura. La columna sigue siendo `TEXT`; si un gasto tiene otra categoría, se conserva al editarlo. Lo que es mantenimiento (aceite, frenos, revisión técnica…) se registra en *Mantenimiento*.
+- **Monto:** obligatorio y mayor a 0 (un gasto de S/ 0 no aporta información).
+- **Kilometraje del gasto:** opcional y solo de referencia. No valida el orden con otros registros ni actualiza el kilometraje del vehículo, porque muchos gastos (seguro, impuesto) no dependen del odómetro.
+- **Historial:** orden cronológico, más reciente primero; en un mismo día, por kilometraje (si ambos lo tienen) y luego por orden de registro. Solo incluye registros activos de vehículos activos. Es de solo lectura: cada movimiento se edita en su pestaña.
+- **Gasto mensual / anual:** suma de mantenimientos (`cost`), combustible (`total_amount`) y otros gastos (`amount`) cuya fecha cae en el mes / año actual (fecha local).
+
+## Siguiente: Sprint 5
+
+Recordatorios por fecha/kilometraje. La tabla `reminders` ya existe en el esquema con RLS y el trigger que sincroniza `completed_at`.

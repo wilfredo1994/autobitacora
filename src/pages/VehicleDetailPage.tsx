@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Fuel, Gauge, Plus, Wrench } from 'lucide-react'
+import { ArrowLeft, Fuel, Gauge, History, Plus, Receipt, Wrench } from 'lucide-react'
 import { useVehicleDetail } from '../hooks/useVehicleDetail'
 import { archiveMaintenance, createMaintenance, updateMaintenance } from '../services/maintenance'
 import { setVehicleMileage } from '../services/vehicles'
 import { buildUpcoming, sortHistory, summarize } from '../lib/maintenance'
+import { buildHistory } from '../lib/history'
 import { formatDate, formatKm, formatMoney } from '../lib/format'
 import { VEHICLE_TYPE_LABELS, type MaintenanceInput, type MaintenanceRecord } from '../types/app'
 import Spinner from '../components/Spinner'
@@ -14,20 +15,29 @@ import MaintenanceList from '../components/MaintenanceList'
 import UpcomingList from '../components/UpcomingList'
 import ConfirmDialog from '../components/ConfirmDialog'
 import FuelSection from '../components/FuelSection'
+import ExpenseSection from '../components/ExpenseSection'
+import VehicleHistorySection from '../components/VehicleHistorySection'
 
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: MaintenanceRecord }
-type Tab = 'maintenance' | 'fuel'
+type Tab = 'maintenance' | 'fuel' | 'expenses' | 'history'
 
 const TABS: { id: Tab; label: string; icon: typeof Wrench }[] = [
   { id: 'maintenance', label: 'Mantenimiento', icon: Wrench },
   { id: 'fuel', label: 'Combustible', icon: Fuel },
+  { id: 'expenses', label: 'Gastos', icon: Receipt },
+  { id: 'history', label: 'Historial', icon: History },
 ]
+
+/** La pestaña vive en la URL (?tab=fuel) para poder enlazarla; sin parámetro = mantenimiento. */
+function parseTab(value: string | null): Tab {
+  return TABS.some((t) => t.id === value) ? (value as Tab) : 'maintenance'
+}
 
 export default function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { vehicle, records, fuelRecords, loading, notFound, error, reload } = useVehicleDetail(id)
+  const { vehicle, records, fuelRecords, expenses, loading, notFound, error, reload } = useVehicleDetail(id)
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab: Tab = searchParams.get('tab') === 'fuel' ? 'fuel' : 'maintenance'
+  const tab = parseTab(searchParams.get('tab'))
 
   const [form, setForm] = useState<FormState>({ mode: 'closed' })
   const [toArchive, setToArchive] = useState<MaintenanceRecord | null>(null)
@@ -40,7 +50,7 @@ export default function VehicleDetailPage() {
   function selectTab(next: Tab) {
     setNotice(null)
     setActionError(null)
-    setSearchParams(next === 'fuel' ? { tab: 'fuel' } : {}, { replace: true })
+    setSearchParams(next === 'maintenance' ? {} : { tab: next }, { replace: true })
   }
 
   const totals = useMemo(() => summarize(records), [records])
@@ -48,6 +58,10 @@ export default function VehicleDetailPage() {
   const upcoming = useMemo(
     () => (vehicle ? buildUpcoming(records, vehicle.current_mileage) : []),
     [records, vehicle],
+  )
+  const timeline = useMemo(
+    () => buildHistory({ maintenance: records, fuel: fuelRecords, expenses }),
+    [records, fuelRecords, expenses],
   )
 
   if (loading) return <Spinner />
@@ -136,7 +150,7 @@ export default function VehicleDetailPage() {
         </div>
       </div>
 
-      <div role="tablist" aria-label="Secciones del vehículo" className="flex gap-1 border-b border-pine-100">
+      <div role="tablist" aria-label="Secciones del vehículo" className="-mx-4 flex gap-1 overflow-x-auto border-b border-pine-100 px-4 sm:mx-0 sm:px-0">
         {TABS.map(({ id: tabId, label, icon: Icon }) => (
           <button
             key={tabId}
@@ -144,7 +158,7 @@ export default function VehicleDetailPage() {
             role="tab"
             aria-selected={tab === tabId}
             onClick={() => selectTab(tabId)}
-            className={`-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+            className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
               tab === tabId ? 'border-emerald-600 text-pine-900' : 'border-transparent text-pine-600 hover:text-pine-900'
             }`}
           >
@@ -159,6 +173,10 @@ export default function VehicleDetailPage() {
 
       {tab === 'fuel' ? (
         <FuelSection vehicle={vehicle} records={fuelRecords} onNotice={setNotice} onError={setActionError} reload={reload} />
+      ) : tab === 'expenses' ? (
+        <ExpenseSection vehicle={vehicle} records={expenses} onNotice={setNotice} onError={setActionError} reload={reload} />
+      ) : tab === 'history' ? (
+        <VehicleHistorySection entries={timeline} />
       ) : (
         <>
           <section className="grid gap-4 sm:grid-cols-3" aria-label="Costos de mantenimiento">

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Car, LayoutDashboard, LogOut } from 'lucide-react'
+import { Car, History, LayoutDashboard, LogOut } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import Logo from '../components/Logo'
 
 const navItems = [
   { to: '/app', label: 'Resumen', icon: LayoutDashboard, end: true },
   { to: '/app/vehicles', label: 'Vehículos', icon: Car, end: false },
+  { to: '/app/history', label: 'Historial', icon: History, end: false },
 ]
 
 export default function AppLayout() {
