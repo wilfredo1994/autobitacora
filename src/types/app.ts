@@ -84,3 +84,57 @@ export const SERVICE_TYPE_SUGGESTIONS = [
   'Revisión técnica',
   'Mantenimiento general',
 ]
+
+export type FuelType = 'gasoline' | 'diesel' | 'glp' | 'gnv' | 'electric' | 'other'
+
+export const FUEL_TYPE_LABELS: Record<FuelType, string> = {
+  gasoline: 'Gasolina',
+  diesel: 'Diésel',
+  glp: 'GLP',
+  gnv: 'GNV',
+  electric: 'Eléctrico',
+  other: 'Otro',
+}
+
+export const FUEL_TYPES = Object.keys(FUEL_TYPE_LABELS) as FuelType[]
+
+/**
+ * Unidad de la cantidad cargada. La columna se llama `liters`, pero para GNV se registran m³
+ * y para eléctrico kWh: así el consumo (km por unidad) sigue teniendo sentido.
+ */
+export const FUEL_UNIT_LABELS: Record<FuelType, string> = {
+  gasoline: 'L',
+  diesel: 'L',
+  glp: 'L',
+  gnv: 'm³',
+  electric: 'kWh',
+  other: 'L',
+}
+
+/** Fila de public.fuel_records. */
+export interface FuelRecord {
+  id: string
+  vehicle_id: string
+  fuel_date: string // 'YYYY-MM-DD'
+  mileage: number
+  fuel_type: FuelType
+  liters: number
+  price_per_liter: number
+  total_amount: number // lo calcula la BD: round(liters * price_per_liter, 2)
+  station: string | null
+  full_tank: boolean
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+/** Datos del formulario de carga (vehicle_id se pasa aparte; total_amount lo calcula la BD). */
+export interface FuelInput {
+  fuel_date: string
+  mileage: number
+  fuel_type: FuelType
+  liters: number
+  price_per_liter: number
+  station: string | null
+  full_tank: boolean
+}
