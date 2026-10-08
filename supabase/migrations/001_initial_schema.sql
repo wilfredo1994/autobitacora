@@ -7,7 +7,7 @@
 -- ---------------------------------------------------------------------
 -- 1. ENUMS
 -- ---------------------------------------------------------------------
-create type public.vehicle_type        as enum ('car', 'motorcycle', 'pickup', 'van', 'truck', 'other');
+create type public.vehicle_type        as enum ('car', 'suv', 'motorcycle', 'pickup', 'van', 'truck', 'other');
 create type public.fuel_type           as enum ('gasoline', 'diesel', 'glp', 'gnv', 'electric', 'other');
 create type public.reminder_status     as enum ('pending', 'completed', 'dismissed');
 create type public.subscription_plan   as enum ('free', 'premium');

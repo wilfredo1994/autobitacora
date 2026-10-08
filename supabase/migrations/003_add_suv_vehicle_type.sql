@@ -1,0 +1,1 @@
+alter type public.vehicle_type add value if not exists 'suv' after 'car';

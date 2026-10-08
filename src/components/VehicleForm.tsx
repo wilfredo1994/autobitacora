@@ -100,18 +100,18 @@ export default function VehicleForm({ vehicle, onSubmit, onClose }: Props) {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="brand" className="field-label">Marca</label>
-              <input id="brand" ref={firstFieldRef} className="field-input" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ej. Honda" maxLength={60} />
+              <input id="brand" ref={firstFieldRef} className="field-input" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ej. Toyota" maxLength={60} />
             </div>
             <div>
               <label htmlFor="model" className="field-label">Modelo</label>
-              <input id="model" className="field-input" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ej. Civic" maxLength={60} />
+              <input id="model" className="field-input" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ej. Camry" maxLength={60} />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="year" className="field-label">Año</label>
-              <input id="year" className="field-input" inputMode="numeric" value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Ej. 1998" />
+              <input id="year" className="field-input" inputMode="numeric" value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Ej. 2026" />
             </div>
             <div>
               <label htmlFor="plate" className="field-label">Placa</label>

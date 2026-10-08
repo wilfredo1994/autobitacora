@@ -1,11 +1,12 @@
-export type VehicleType = 'car' | 'motorcycle' | 'pickup' | 'van' | 'truck' | 'other'
+export type VehicleType = 'car' | 'suv' | 'motorcycle' | 'pickup' | 'van' | 'truck' | 'other'
 
 export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
   car: 'Auto',
+  suv: 'SUV',
   motorcycle: 'Moto',
   pickup: 'Camioneta pickup',
   van: 'Van / Minivan',
-  truck: 'Camión',
+  truck: 'Camión',  
   other: 'Otro',
 }
 
