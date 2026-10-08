@@ -70,3 +70,26 @@ export async function archiveVehicle(id: string): Promise<void> {
 
   if (error) throw toFriendlyError(error)
 }
+
+/** Un vehículo activo del usuario. Devuelve null si no existe, está archivado o no es suyo (RLS). */
+export async function getVehicle(id: string): Promise<Vehicle | null> {
+  const { data, error } = await supabase
+    .from('vehicles')
+    .select('*')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  // 22P02 = el id de la URL no es un UUID válido → equivale a "no encontrado"
+  if (error) {
+    if (error.code === '22P02') return null
+    throw toFriendlyError(error)
+  }
+  return (data as Vehicle | null) ?? null
+}
+
+/** Actualiza solo el kilometraje actual (por ejemplo, al registrar un mantenimiento más reciente). */
+export async function setVehicleMileage(id: string, mileage: number): Promise<void> {
+  const { error } = await supabase.from('vehicles').update({ current_mileage: mileage }).eq('id', id)
+  if (error) throw toFriendlyError(error)
+}

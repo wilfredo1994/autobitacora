@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Archive, Pencil, Plus } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Archive, History, Pencil, Plus } from 'lucide-react'
 import { useVehicles } from '../hooks/useVehicles'
 import { archiveVehicle, createVehicle, updateVehicle } from '../services/vehicles'
 import type { Vehicle, VehicleInput } from '../types/app'
@@ -91,6 +91,10 @@ export default function VehiclesPage() {
               vehicle={v}
               actions={
                 <>
+                  <Link to={`/app/vehicles/${v.id}`} className="btn-primary !px-3 !py-2">
+                    <History className="h-4 w-4" aria-hidden />
+                    Historial
+                  </Link>
                   <button type="button" className="btn-secondary !px-3 !py-2" onClick={() => { setNotice(null); setForm({ mode: 'edit', vehicle: v }) }}>
                     <Pencil className="h-4 w-4" aria-hidden />
                     Editar

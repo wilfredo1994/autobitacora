@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Car, Gauge } from 'lucide-react'
 import { VEHICLE_TYPE_LABELS, type Vehicle } from '../types/app'
 
@@ -13,7 +14,9 @@ export default function VehicleCard({ vehicle, actions }: { vehicle: Vehicle; ac
         </div>
         <div>
           <h3 className="text-lg font-bold leading-tight text-pine-900">
+            <Link to={`/app/vehicles/${vehicle.id}`} className="hover:text-emerald-700 hover:underline">
             {vehicle.brand} {vehicle.model}
+            </Link>
           </h3>
           <p className="mt-0.5 text-sm text-pine-600">
             {VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.year}

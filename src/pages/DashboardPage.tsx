@@ -1,20 +1,54 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Car, Gauge, Plus } from 'lucide-react'
+import { Car, CalendarDays, Gauge, Plus, Wallet } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useVehicles } from '../hooks/useVehicles'
+import { useAllMaintenance } from '../hooks/useAllMaintenance'
+import { buildUpcoming, summarize } from '../lib/maintenance'
+import { formatKm, formatMoney } from '../lib/format'
 import Spinner from '../components/Spinner'
 import Alert from '../components/Alert'
 import VehicleCard from '../components/VehicleCard'
+import UpcomingList, { type UpcomingEntry } from '../components/UpcomingList'
 
-const kmFormatter = new Intl.NumberFormat('es-PE')
+const MAX_UPCOMING = 4
 
 export default function DashboardPage() {
   const { user } = useAuth()
-  const { vehicles, loading, error } = useVehicles()
+  const { vehicles, loading: loadingVehicles, error: vehiclesError } = useVehicles()
+  const { records, loading: loadingRecords, error: recordsError } = useAllMaintenance()
+
   const fullName = (user?.user_metadata?.full_name as string | undefined)?.trim()
   const firstName = fullName?.split(' ')[0]
 
-  if (loading) return <Spinner />
+  // Solo cuentan mantenimientos de vehículos activos (no archivados)
+  const activeRecords = useMemo(() => {
+    const ids = new Set(vehicles.map((v) => v.id))
+    return records.filter((r) => ids.has(r.vehicle_id))
+  }, [vehicles, records])
+
+  const totals = useMemo(() => summarize(activeRecords), [activeRecords])
+
+  const upcoming = useMemo<UpcomingEntry[]>(() => {
+    const entries: UpcomingEntry[] = []
+    for (const v of vehicles) {
+      const own = activeRecords.filter((r) => r.vehicle_id === v.id)
+      for (const item of buildUpcoming(own, v.current_mileage)) {
+        entries.push({ item, vehicleLabel: `${v.brand} ${v.model} · ${v.license_plate}` })
+      }
+    }
+    const rank = { overdue: 0, soon: 1, ok: 2 } as const
+    return entries
+      .sort((a, b) => {
+        if (rank[a.item.status] !== rank[b.item.status]) return rank[a.item.status] - rank[b.item.status]
+        return (a.item.daysRemaining ?? Infinity) - (b.item.daysRemaining ?? Infinity)
+      })
+      .slice(0, MAX_UPCOMING)
+  }, [vehicles, activeRecords])
+
+  if (loadingVehicles || loadingRecords) return <Spinner />
+
+  const error = vehiclesError ?? recordsError
 
   return (
     <div className="space-y-8">
@@ -27,7 +61,7 @@ export default function DashboardPage() {
 
       {error && <Alert>{error}</Alert>}
 
-      {!error && vehicles.length === 0 && (
+      {!vehiclesError && vehicles.length === 0 && (
         <section className="card flex flex-col items-center px-6 py-14 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pine-50 text-emerald-600">
             <Car className="h-7 w-7" aria-hidden />
@@ -43,9 +77,9 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {!error && vehicles.length > 0 && (
+      {!vehiclesError && vehicles.length > 0 && (
         <>
-          <section className="grid gap-4 sm:grid-cols-2" aria-label="Indicadores">
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Indicadores">
             <div className="card p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-pine-600">
                 <Car className="h-4 w-4 text-emerald-600" aria-hidden />
@@ -56,15 +90,43 @@ export default function DashboardPage() {
             <div className="card p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-pine-600">
                 <Gauge className="h-4 w-4 text-emerald-600" aria-hidden />
-                Kilometraje registrado
+                {vehicles.length > 1 ? 'Kilometraje total' : 'Kilometraje'}
               </div>
-              <p className="mt-2 text-3xl font-extrabold text-pine-900">
-                {kmFormatter.format(vehicles.reduce((sum, v) => sum + v.current_mileage, 0))}
-                <span className="ml-1 text-base font-semibold text-pine-600">km</span>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">
+                {formatKm(vehicles.reduce((sum, v) => sum + v.current_mileage, 0))}
               </p>
-              {vehicles.length > 1 && <p className="mt-1 text-xs text-pine-600">Suma de todos tus vehículos</p>}
+            </div>
+            <div className="card p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-pine-600">
+                <Wallet className="h-4 w-4 text-emerald-600" aria-hidden />
+                Mantenimiento este mes
+              </div>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisMonth)}</p>
+            </div>
+            <div className="card p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-pine-600">
+                <CalendarDays className="h-4 w-4 text-emerald-600" aria-hidden />
+                Mantenimiento este año
+              </div>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisYear)}</p>
             </div>
           </section>
+          <p className="-mt-4 text-xs text-pine-600">
+            Los montos incluyen solo mantenimientos. Combustible y otros gastos se sumarán cuando estén disponibles.
+          </p>
+
+          {upcoming.length > 0 ? (
+            <section className="space-y-3" aria-label="Próximos mantenimientos">
+              <h2 className="text-lg font-bold text-pine-900">Próximos mantenimientos</h2>
+              <UpcomingList entries={upcoming} />
+            </section>
+          ) : (
+            <p className="rounded-xl border border-dashed border-pine-200 px-4 py-3 text-sm text-pine-600">
+              {activeRecords.length === 0
+                ? 'Registra un mantenimiento desde el detalle de tu vehículo para ver aquí sus costos y lo que viene después.'
+                : 'No tienes mantenimientos programados. Al registrar un servicio puedes indicar cuándo toca el siguiente.'}
+            </p>
+          )}
 
           <section aria-label="Mis vehículos" className="space-y-3">
             <div className="flex items-center justify-between">
@@ -77,10 +139,6 @@ export default function DashboardPage() {
               <VehicleCard key={v.id} vehicle={v} />
             ))}
           </section>
-
-          <p className="rounded-xl border border-dashed border-pine-200 px-4 py-3 text-sm text-pine-600">
-            Los costos, mantenimientos y recordatorios aparecerán aquí cuando registres tus primeros movimientos.
-          </p>
         </>
       )}
     </div>
