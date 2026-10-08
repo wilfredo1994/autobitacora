@@ -50,3 +50,9 @@ export function formatUnitPrice(value: number): string {
 export function formatDecimal(value: number): string {
   return decimalFormatter.format(value)
 }
+
+/** 'YYYY-MM' → "octubre de 2026". */
+export function formatMonth(yearMonth: string): string {
+  const label = parseISODate(`${yearMonth}-01`).toLocaleDateString('es-PE', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}

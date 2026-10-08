@@ -138,3 +138,44 @@ export interface FuelInput {
   station: string | null
   full_tank: boolean
 }
+
+/**
+ * Categorías de "otros gastos". La columna es TEXT, pero se ofrece una lista fija para que
+ * las estadísticas puedan agrupar sin variantes de escritura. Lo que es mantenimiento
+ * (aceite, frenos, revisión técnica…) va en su propio módulo.
+ */
+export const EXPENSE_CATEGORIES = [
+  'SOAT',
+  'Seguro vehicular',
+  'Impuesto vehicular',
+  'Peajes',
+  'Estacionamiento',
+  'Lavado',
+  'Multas',
+  'Accesorios',
+  'Trámites',
+  'Otro',
+]
+
+/** Fila de public.expenses. */
+export interface Expense {
+  id: string
+  vehicle_id: string
+  expense_date: string // 'YYYY-MM-DD'
+  category: string
+  description: string | null
+  amount: number
+  mileage: number | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+/** Datos del formulario de gasto (vehicle_id se pasa aparte). */
+export interface ExpenseInput {
+  expense_date: string
+  category: string
+  description: string | null
+  amount: number
+  mileage: number | null
+}

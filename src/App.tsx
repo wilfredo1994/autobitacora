@@ -8,6 +8,7 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import VehiclesPage from './pages/VehiclesPage'
 import VehicleDetailPage from './pages/VehicleDetailPage'
+import HistoryPage from './pages/HistoryPage'
 import { isSupabaseConfigured } from './lib/supabase'
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="vehicles" element={<VehiclesPage />} />
               <Route path="vehicles/:id" element={<VehicleDetailPage />} />
+              <Route path="history" element={<HistoryPage />} />
             </Route>
           </Route>
 

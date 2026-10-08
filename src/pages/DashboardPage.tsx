@@ -5,21 +5,25 @@ import { useAuth } from '../auth/AuthProvider'
 import { useVehicles } from '../hooks/useVehicles'
 import { useAllMaintenance } from '../hooks/useAllMaintenance'
 import { useAllFuel } from '../hooks/useAllFuel'
-import { buildUpcoming, summarize } from '../lib/maintenance'
-import { summarizeFuel } from '../lib/fuel'
+import { useAllExpenses } from '../hooks/useAllExpenses'
+import { buildUpcoming } from '../lib/maintenance'
+import { buildHistory, summarizeHistory } from '../lib/history'
 import { formatKm, formatMoney } from '../lib/format'
 import Spinner from '../components/Spinner'
 import Alert from '../components/Alert'
 import VehicleCard from '../components/VehicleCard'
 import UpcomingList, { type UpcomingEntry } from '../components/UpcomingList'
+import HistoryList from '../components/HistoryList'
 
 const MAX_UPCOMING = 4
+const MAX_RECENT = 5
 
 export default function DashboardPage() {
   const { user } = useAuth()
   const { vehicles, loading: loadingVehicles, error: vehiclesError } = useVehicles()
   const { records, loading: loadingRecords, error: recordsError } = useAllMaintenance()
   const { records: fuelRecords, loading: loadingFuel, error: fuelError } = useAllFuel()
+  const { records: expenses, loading: loadingExpenses, error: expensesError } = useAllExpenses()
 
   const fullName = (user?.user_metadata?.full_name as string | undefined)?.trim()
   const firstName = fullName?.split(' ')[0]
@@ -28,9 +32,17 @@ export default function DashboardPage() {
   const activeIds = useMemo(() => new Set(vehicles.map((v) => v.id)), [vehicles])
   const activeRecords = useMemo(() => records.filter((r) => activeIds.has(r.vehicle_id)), [activeIds, records])
   const activeFuel = useMemo(() => fuelRecords.filter((r) => activeIds.has(r.vehicle_id)), [activeIds, fuelRecords])
+  const activeExpenses = useMemo(() => expenses.filter((r) => activeIds.has(r.vehicle_id)), [activeIds, expenses])
 
-  const totals = useMemo(() => summarize(activeRecords), [activeRecords])
-  const fuelTotals = useMemo(() => summarizeFuel(activeFuel), [activeFuel])
+  const timeline = useMemo(
+    () => buildHistory({ maintenance: activeRecords, fuel: activeFuel, expenses: activeExpenses }),
+    [activeRecords, activeFuel, activeExpenses],
+  )
+  const totals = useMemo(() => summarizeHistory(timeline), [timeline])
+  const vehicleLabels = useMemo(
+    () => new Map(vehicles.map((v) => [v.id, `${v.brand} ${v.model} · ${v.license_plate}`])),
+    [vehicles],
+  )
 
   const upcoming = useMemo<UpcomingEntry[]>(() => {
     const entries: UpcomingEntry[] = []
@@ -49,9 +61,12 @@ export default function DashboardPage() {
       .slice(0, MAX_UPCOMING)
   }, [vehicles, activeRecords])
 
-  if (loadingVehicles || loadingRecords || loadingFuel) return <Spinner />
+  if (loadingVehicles || loadingRecords || loadingFuel || loadingExpenses) return <Spinner />
 
-  const error = vehiclesError ?? recordsError ?? fuelError
+  const error = vehiclesError ?? recordsError ?? fuelError ?? expensesError
+
+  const breakdown = (period: 'thisMonth' | 'thisYear') =>
+    `Mantenimiento ${formatMoney(totals.byKind.maintenance[period])} · Combustible ${formatMoney(totals.byKind.fuel[period])} · Otros ${formatMoney(totals.byKind.expense[period])}`
 
   return (
     <div className="space-y-8">
@@ -104,25 +119,18 @@ export default function DashboardPage() {
                 <Wallet className="h-4 w-4 text-emerald-600" aria-hidden />
                 Gasto este mes
               </div>
-              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisMonth + fuelTotals.thisMonth)}</p>
-              <p className="mt-1 text-xs text-pine-600">
-                Mantenimiento {formatMoney(totals.thisMonth)} · Combustible {formatMoney(fuelTotals.thisMonth)}
-              </p>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisMonth)}</p>
+              <p className="mt-1 text-xs text-pine-600">{breakdown('thisMonth')}</p>
             </div>
             <div className="card p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-pine-600">
                 <CalendarDays className="h-4 w-4 text-emerald-600" aria-hidden />
                 Gasto este año
               </div>
-              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisYear + fuelTotals.thisYear)}</p>
-              <p className="mt-1 text-xs text-pine-600">
-                Mantenimiento {formatMoney(totals.thisYear)} · Combustible {formatMoney(fuelTotals.thisYear)}
-              </p>
+              <p className="mt-2 text-2xl font-extrabold text-pine-900">{formatMoney(totals.thisYear)}</p>
+              <p className="mt-1 text-xs text-pine-600">{breakdown('thisYear')}</p>
             </div>
           </section>
-          <p className="-mt-4 text-xs text-pine-600">
-            Los montos incluyen mantenimiento y combustible. Otros gastos (seguro, peajes, etc.) se sumarán cuando estén disponibles.
-          </p>
 
           {upcoming.length > 0 ? (
             <section className="space-y-3" aria-label="Próximos mantenimientos">
@@ -135,6 +143,18 @@ export default function DashboardPage() {
                 ? 'Registra un mantenimiento desde el detalle de tu vehículo para ver aquí sus costos y lo que viene después.'
                 : 'No tienes mantenimientos programados. Al registrar un servicio puedes indicar cuándo toca el siguiente.'}
             </p>
+          )}
+
+          {timeline.length > 0 && (
+            <section aria-label="Últimos movimientos" className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-pine-900">Últimos movimientos</h2>
+                <Link to="/app/history" className="text-sm font-semibold text-emerald-700 hover:underline">
+                  Ver historial
+                </Link>
+              </div>
+              <HistoryList entries={timeline.slice(0, MAX_RECENT)} vehicleLabels={vehicles.length > 1 ? vehicleLabels : undefined} />
+            </section>
           )}
 
           <section aria-label="Mis vehículos" className="space-y-3">
