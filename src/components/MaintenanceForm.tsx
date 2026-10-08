@@ -6,6 +6,7 @@ import { SERVICE_TYPE_SUGGESTIONS, type MaintenanceInput, type MaintenanceRecord
 
 interface Props {
   vehicle: Vehicle
+  existingRecords: MaintenanceRecord[]
   /** Si se pasa un registro, el formulario edita; si no, crea. */
   record?: MaintenanceRecord | null
   /** updateVehicleMileage: el usuario aceptó actualizar el kilometraje del vehículo. */
@@ -15,7 +16,7 @@ interface Props {
 
 const toText = (n: number | null | undefined) => (n == null ? '' : String(n))
 
-export default function MaintenanceForm({ vehicle, record, onSubmit, onClose }: Props) {
+export default function MaintenanceForm({ vehicle, existingRecords, record, onSubmit, onClose }: Props) {
   const isEdit = Boolean(record)
   const [serviceType, setServiceType] = useState(record?.service_type ?? '')
   const [serviceDate, setServiceDate] = useState(record?.service_date ?? todayISO())
@@ -41,10 +42,16 @@ export default function MaintenanceForm({ vehicle, record, onSubmit, onClose }: 
 
   const mileageNum = mileage === '' ? NaN : Number(mileage)
   const offerMileageUpdate = Number.isInteger(mileageNum) && mileageNum > vehicle.current_mileage
+  const possibleDuplicate = !isEdit && existingRecords.some((existing) =>
+    existing.service_type.trim().toLocaleLowerCase() === serviceType.trim().toLocaleLowerCase()
+    && existing.service_date === serviceDate
+    && existing.mileage === mileageNum,
+  )
 
   function validate(): MaintenanceInput | string {
     if (!serviceType.trim()) return 'Indica el tipo de servicio.'
     if (!serviceDate) return 'Indica la fecha del servicio.'
+    if (serviceDate > todayISO()) return 'La fecha del servicio no puede estar en el futuro.'
     if (!Number.isInteger(mileageNum) || mileageNum < 0) {
       return 'El kilometraje del servicio debe ser un número entero mayor o igual a 0.'
     }
@@ -123,10 +130,12 @@ export default function MaintenanceForm({ vehicle, record, onSubmit, onClose }: 
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="service_type" className="field-label">Tipo de servicio</label>
+            <label htmlFor="service_type" className="field-label">Tipo de servicio <span className="text-red-700">(obligatorio)</span></label>
             <input
               id="service_type"
               ref={firstFieldRef}
+              required
+              aria-required="true"
               list="service-type-options"
               className="field-input"
               value={serviceType}
@@ -144,18 +153,24 @@ export default function MaintenanceForm({ vehicle, record, onSubmit, onClose }: 
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label htmlFor="service_date" className="field-label">Fecha</label>
-              <input id="service_date" type="date" className="field-input" value={serviceDate} onChange={(e) => setServiceDate(e.target.value)} />
+              <label htmlFor="service_date" className="field-label">Fecha <span className="text-red-700">(obligatorio)</span></label>
+              <input id="service_date" type="date" className="field-input" value={serviceDate} max={todayISO()} required aria-required="true" onChange={(e) => setServiceDate(e.target.value)} />
             </div>
             <div>
-              <label htmlFor="m_mileage" className="field-label">Kilometraje</label>
-              <input id="m_mileage" className="field-input" inputMode="numeric" value={mileage} onChange={(e) => setMileage(e.target.value.replace(/\D/g, ''))} />
+              <label htmlFor="m_mileage" className="field-label">Kilometraje <span className="text-red-700">(obligatorio)</span></label>
+              <input id="m_mileage" className="field-input" inputMode="numeric" value={mileage} required aria-required="true" onChange={(e) => setMileage(e.target.value.replace(/\D/g, ''))} />
             </div>
             <div>
-              <label htmlFor="cost" className="field-label">Costo (S/)</label>
+              <label htmlFor="cost" className="field-label">Costo (S/) <span className="font-normal text-pine-600">(opcional; vacío = S/ 0)</span></label>
               <input id="cost" className="field-input" inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="0.00" />
             </div>
           </div>
+
+          {possibleDuplicate && (
+            <Alert kind="warning">
+              Ya hay un mantenimiento del mismo tipo, fecha y kilometraje. Verifica que no sea un registro duplicado.
+            </Alert>
+          )}
 
           {offerMileageUpdate && (
             <label className="flex items-start gap-2.5 rounded-xl bg-pine-50 px-3.5 py-3 text-sm text-pine-800">

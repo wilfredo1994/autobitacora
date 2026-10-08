@@ -191,6 +191,7 @@ export default function VehicleDetailPage() {
         <MaintenanceForm
           key={form.mode === 'edit' ? form.record.id : 'new'}
           vehicle={vehicle}
+          existingRecords={records}
           record={form.mode === 'edit' ? form.record : null}
           onSubmit={handleSubmit}
           onClose={closeForm}

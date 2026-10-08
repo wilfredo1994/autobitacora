@@ -2,6 +2,9 @@ import { supabase } from '../lib/supabase'
 import type { MaintenanceInput, MaintenanceRecord } from '../types/app'
 
 function toFriendlyError(error: { code?: string; message: string }): Error {
+  if (error.code === 'P0001') {
+    return new Error('El kilometraje no coincide con el orden de los registros de este vehículo.')
+  }
   if (error.code === '23514') {
     return new Error('Revisa los datos: el costo, el kilometraje y las fechas del próximo mantenimiento no son válidos.')
   }

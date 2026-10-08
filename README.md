@@ -27,11 +27,11 @@ Conoce el historial, costo y próximo mantenimiento de tu vehículo en un solo l
 ## 3. Ejecutar el SQL
 
 1. En Supabase abre **SQL Editor → New query**.
-2. Pega todo el contenido de `supabase/migrations/001_initial_schema.sql`.
-3. Pulsa **Run**. Debe terminar con `Success. No rows returned`.
+2. En un proyecto nuevo, pega y ejecuta `supabase/migrations/001_initial_schema.sql`.
+3. Para un proyecto que ya tiene el esquema inicial, crea otra query, pega y ejecuta `supabase/migrations/002_business_rules.sql`.
 4. Verifica en **Table Editor** que existen: `profiles`, `vehicles`, `maintenance_records`, `fuel_records`, `expenses`, `reminders`, `subscriptions` y que cada una muestra el candado de RLS activo.
 
-> El script se ejecuta **una sola vez**. Si necesitas repetirlo en un proyecto de pruebas, bórralo y créalo de nuevo, o elimina antes los objetos creados.
+> La migración 001 se ejecuta una sola vez en un proyecto nuevo. La 002 agrega reglas a un esquema existente y debe aplicarse una sola vez.
 
 ## 4. Configurar autenticación
 

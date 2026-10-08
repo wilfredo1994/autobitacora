@@ -19,6 +19,9 @@ function toFriendlyError(error: { code?: string; message: string }): Error {
   if (error.code === '23514') {
     return new Error('Revisa los datos: año, kilometraje o placa no son válidos.')
   }
+  if (error.code === 'P0001') {
+    return new Error('El kilometraje actual no puede ser menor que el de un registro guardado.')
+  }
   if (error.code === '42501') {
     return new Error('No tienes permiso para realizar esta acción.')
   }
