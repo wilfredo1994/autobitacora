@@ -6,8 +6,9 @@ interface Props {
   records: FuelRecord[]
   /** Consumo del tramo que termina en cada carga (solo cargas de tanque lleno con un lleno anterior). */
   efficiency: Map<string, number>
-  onEdit: (record: FuelRecord) => void
-  onArchive: (record: FuelRecord) => void
+  /** Sin acciones (vehículo en solo lectura), la lista no muestra los botones. */
+  onEdit?: (record: FuelRecord) => void
+  onArchive?: (record: FuelRecord) => void
 }
 
 export default function FuelList({ records, efficiency, onEdit, onArchive }: Props) {
@@ -52,16 +53,18 @@ export default function FuelList({ records, efficiency, onEdit, onArchive }: Pro
               )}
             </div>
 
-            <div className="mt-3 flex gap-2 border-t border-pine-50 pt-3">
-              <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onEdit(r)}>
-                <Pencil className="h-3.5 w-3.5" aria-hidden />
-                Editar
-              </button>
-              <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onArchive(r)}>
-                <Archive className="h-3.5 w-3.5" aria-hidden />
-                Archivar
-              </button>
-            </div>
+            {onEdit && onArchive && (
+              <div className="mt-3 flex gap-2 border-t border-pine-50 pt-3">
+                <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onEdit(r)}>
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  Editar
+                </button>
+                <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onArchive(r)}>
+                  <Archive className="h-3.5 w-3.5" aria-hidden />
+                  Archivar
+                </button>
+              </div>
+            )}
           </li>
         )
       })}

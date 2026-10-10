@@ -4,8 +4,9 @@ import type { Expense } from '../types/app'
 
 interface Props {
   records: Expense[]
-  onEdit: (record: Expense) => void
-  onArchive: (record: Expense) => void
+  /** Sin acciones (vehículo en solo lectura), la lista no muestra los botones. */
+  onEdit?: (record: Expense) => void
+  onArchive?: (record: Expense) => void
 }
 
 export default function ExpenseList({ records, onEdit, onArchive }: Props) {
@@ -32,16 +33,18 @@ export default function ExpenseList({ records, onEdit, onArchive }: Props) {
 
           {r.description && <p className="mt-2 text-sm text-pine-600">{r.description}</p>}
 
-          <div className="mt-3 flex gap-2 border-t border-pine-50 pt-3">
-            <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onEdit(r)}>
-              <Pencil className="h-3.5 w-3.5" aria-hidden />
-              Editar
-            </button>
-            <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onArchive(r)}>
-              <Archive className="h-3.5 w-3.5" aria-hidden />
-              Archivar
-            </button>
-          </div>
+          {onEdit && onArchive && (
+            <div className="mt-3 flex gap-2 border-t border-pine-50 pt-3">
+              <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onEdit(r)}>
+                <Pencil className="h-3.5 w-3.5" aria-hidden />
+                Editar
+              </button>
+              <button type="button" className="btn-secondary !px-3 !py-1.5 !text-xs" onClick={() => onArchive(r)}>
+                <Archive className="h-3.5 w-3.5" aria-hidden />
+                Archivar
+              </button>
+            </div>
+          )}
         </li>
       ))}
     </ul>

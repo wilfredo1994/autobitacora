@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Fuel, Gauge, History, Plus, Receipt, Wrench } from 'lucide-react'
+import { ArrowLeft, Bell, Fuel, Gauge, History, Plus, Receipt, Wrench } from 'lucide-react'
 import { useVehicleDetail } from '../hooks/useVehicleDetail'
 import { archiveMaintenance, createMaintenance, updateMaintenance } from '../services/maintenance'
 import { setVehicleMileage } from '../services/vehicles'
@@ -17,14 +17,20 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import FuelSection from '../components/FuelSection'
 import ExpenseSection from '../components/ExpenseSection'
 import VehicleHistorySection from '../components/VehicleHistorySection'
+import ReminderSection from '../components/ReminderSection'
+import PremiumNotice, { HiddenHistoryNotice } from '../components/PremiumNotice'
+import { useVehicles } from '../hooks/useVehicles'
+import { usePlan } from '../plan/PlanProvider'
+import { hiddenRecordNote, isVisible, writableVehicleIds } from '../lib/plan'
 
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: MaintenanceRecord }
-type Tab = 'maintenance' | 'fuel' | 'expenses' | 'history'
+type Tab = 'maintenance' | 'fuel' | 'expenses' | 'reminders' | 'history'
 
 const TABS: { id: Tab; label: string; icon: typeof Wrench }[] = [
   { id: 'maintenance', label: 'Mantenimiento', icon: Wrench },
   { id: 'fuel', label: 'Combustible', icon: Fuel },
   { id: 'expenses', label: 'Gastos', icon: Receipt },
+  { id: 'reminders', label: 'Recordatorios', icon: Bell },
   { id: 'history', label: 'Historial', icon: History },
 ]
 
@@ -35,9 +41,16 @@ function parseTab(value: string | null): Tab {
 
 export default function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { vehicle, records, fuelRecords, expenses, loading, notFound, error, reload } = useVehicleDetail(id)
+  const { vehicle, records, fuelRecords, expenses, reminders, loading, notFound, error, reload } = useVehicleDetail(id)
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = parseTab(searchParams.get('tab'))
+  const { plan, cutoff } = usePlan()
+  // Para saber si este vehículo es editable hay que ver su posición entre todos los activos.
+  const { vehicles: activeVehicles, loading: loadingVehicles } = useVehicles()
+  const readOnly = useMemo(
+    () => Boolean(vehicle) && !loadingVehicles && !writableVehicleIds(activeVehicles, plan.vehicle_limit).has(vehicle!.id),
+    [vehicle, activeVehicles, loadingVehicles, plan.vehicle_limit],
+  )
 
   const [form, setForm] = useState<FormState>({ mode: 'closed' })
   const [toArchive, setToArchive] = useState<MaintenanceRecord | null>(null)
@@ -55,6 +68,8 @@ export default function VehicleDetailPage() {
 
   const totals = useMemo(() => summarize(records), [records])
   const history = useMemo(() => sortHistory(records), [records])
+  // Próximos mantenimientos y totales usan todo; la lista, solo lo visible con el plan.
+  const visibleHistory = useMemo(() => history.filter((r) => isVisible(r.service_date, cutoff)), [history, cutoff])
   const upcoming = useMemo(
     () => (vehicle ? buildUpcoming(records, vehicle.current_mileage) : []),
     [records, vehicle],
@@ -89,10 +104,10 @@ export default function VehicleDetailPage() {
     let message: string
     if (form.mode === 'edit') {
       await updateMaintenance(form.record.id, input)
-      message = 'Mantenimiento actualizado.'
+      message = `Mantenimiento actualizado.${hiddenRecordNote(input.service_date, cutoff)}`
     } else {
       await createMaintenance(vehicle.id, input)
-      message = 'Mantenimiento registrado.'
+      message = `Mantenimiento registrado.${hiddenRecordNote(input.service_date, cutoff)}`
     }
 
     // El mantenimiento ya quedó guardado. Si falla solo el kilometraje, no se lanza error
@@ -168,15 +183,24 @@ export default function VehicleDetailPage() {
         ))}
       </div>
 
+      {readOnly && (
+        <PremiumNotice title="Este vehículo está en solo lectura">
+          Tu plan permite editar {plan.vehicle_limit === 1 ? 'tu vehículo más antiguo' : `tus ${plan.vehicle_limit} vehículos más antiguos`}.
+          Puedes ver todo su historial; para registrar o editar, archiva los vehículos que no uses o pásate a Premium.
+        </PremiumNotice>
+      )}
+
       {notice && <Alert kind="success">{notice}</Alert>}
       {(error || actionError) && <Alert>{error ?? actionError}</Alert>}
 
       {tab === 'fuel' ? (
-        <FuelSection vehicle={vehicle} records={fuelRecords} onNotice={setNotice} onError={setActionError} reload={reload} />
+        <FuelSection vehicle={vehicle} records={fuelRecords} onNotice={setNotice} onError={setActionError} reload={reload} readOnly={readOnly} cutoff={cutoff} />
       ) : tab === 'expenses' ? (
-        <ExpenseSection vehicle={vehicle} records={expenses} onNotice={setNotice} onError={setActionError} reload={reload} />
+        <ExpenseSection vehicle={vehicle} records={expenses} onNotice={setNotice} onError={setActionError} reload={reload} readOnly={readOnly} cutoff={cutoff} />
+      ) : tab === 'reminders' ? (
+        <ReminderSection vehicle={vehicle} reminders={reminders} onNotice={setNotice} onError={setActionError} reload={reload} readOnly={readOnly} />
       ) : tab === 'history' ? (
-        <VehicleHistorySection entries={timeline} />
+        <VehicleHistorySection entries={timeline} cutoff={cutoff} />
       ) : (
         <>
           <section className="grid gap-4 sm:grid-cols-3" aria-label="Costos de mantenimiento">
@@ -215,7 +239,7 @@ export default function VehicleDetailPage() {
           <section className="space-y-3" aria-label="Historial de mantenimiento">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-pine-900">Historial de mantenimiento</h2>
-              {history.length > 0 && (
+              {history.length > 0 && !readOnly && (
                 <button type="button" className="btn-primary" onClick={() => { setNotice(null); setForm({ mode: 'create' }) }}>
                   <Plus className="h-4 w-4" aria-hidden />
                   Registrar mantenimiento
@@ -231,17 +255,22 @@ export default function VehicleDetailPage() {
                 <p className="mt-1 max-w-sm text-sm text-pine-600">
                   Anota el último servicio que recuerdes (aceite, filtros, frenos…) y define cuándo toca el siguiente.
                 </p>
-                <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
-                  <Plus className="h-4 w-4" aria-hidden />
-                  Registrar el primero
-                </button>
+                {!readOnly && (
+                  <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
+                    <Plus className="h-4 w-4" aria-hidden />
+                    Registrar el primero
+                  </button>
+                )}
               </div>
             ) : (
-              <MaintenanceList
-                records={history}
-                onEdit={(record) => { setNotice(null); setForm({ mode: 'edit', record }) }}
-                onArchive={setToArchive}
-              />
+              <>
+                <MaintenanceList
+                  records={visibleHistory}
+                  onEdit={readOnly ? undefined : (record) => { setNotice(null); setForm({ mode: 'edit', record }) }}
+                  onArchive={readOnly ? undefined : setToArchive}
+                />
+                <HiddenHistoryNotice count={history.length - visibleHistory.length} cutoff={cutoff} />
+              </>
             )}
           </section>
 

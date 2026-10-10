@@ -1,7 +1,10 @@
 import { supabase } from '../lib/supabase'
+import { planError } from '../lib/plan'
 import type { MaintenanceInput, MaintenanceRecord } from '../types/app'
 
 function toFriendlyError(error: { code?: string; message: string }): Error {
+  const limitError = planError(error)
+  if (limitError) return limitError
   if (error.code === 'P0001') {
     return new Error('El kilometraje no coincide con el orden de los registros de este vehículo.')
   }

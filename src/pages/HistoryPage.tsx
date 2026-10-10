@@ -1,40 +1,29 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Car, History } from 'lucide-react'
-import { useVehicles } from '../hooks/useVehicles'
-import { useAllMaintenance } from '../hooks/useAllMaintenance'
-import { useAllFuel } from '../hooks/useAllFuel'
-import { useAllExpenses } from '../hooks/useAllExpenses'
-import { buildHistory } from '../lib/history'
+import { useMovements } from '../hooks/useMovements'
 import { formatMoney } from '../lib/format'
 import Spinner from '../components/Spinner'
 import Alert from '../components/Alert'
 import HistoryList from '../components/HistoryList'
 import HistoryKindFilter, { type KindFilter } from '../components/HistoryKindFilter'
+import { HiddenHistoryNotice } from '../components/PremiumNotice'
+import { usePlan } from '../plan/PlanProvider'
+import { isVisible } from '../lib/plan'
 
 const PAGE_SIZE = 50
 
 /** Historial consolidado de todos los vehículos activos del usuario. */
 export default function HistoryPage() {
-  const { vehicles, loading: loadingVehicles, error: vehiclesError } = useVehicles()
-  const { records, loading: loadingRecords, error: recordsError } = useAllMaintenance()
-  const { records: fuelRecords, loading: loadingFuel, error: fuelError } = useAllFuel()
-  const { records: expenses, loading: loadingExpenses, error: expensesError } = useAllExpenses()
+  const { vehicles, vehicleLabels, timeline: fullTimeline, loading, vehiclesError, error } = useMovements()
+  const { cutoff } = usePlan()
+  // Plan Free: solo los últimos 6 meses (los anteriores siguen guardados).
+  const timeline = useMemo(() => fullTimeline.filter((e) => isVisible(e.date, cutoff)), [fullTimeline, cutoff])
+  const hiddenCount = fullTimeline.length - timeline.length
 
   const [vehicleId, setVehicleId] = useState('all')
   const [kind, setKind] = useState<KindFilter>('all')
   const [limit, setLimit] = useState(PAGE_SIZE)
-
-  const vehicleLabels = useMemo(
-    () => new Map(vehicles.map((v) => [v.id, `${v.brand} ${v.model} · ${v.license_plate}`])),
-    [vehicles],
-  )
-
-  // Solo cuentan movimientos de vehículos activos (no archivados)
-  const timeline = useMemo(() => {
-    const entries = buildHistory({ maintenance: records, fuel: fuelRecords, expenses })
-    return entries.filter((e) => vehicleLabels.has(e.vehicleId))
-  }, [records, fuelRecords, expenses, vehicleLabels])
 
   const filtered = useMemo(
     () => timeline.filter((e) => (vehicleId === 'all' || e.vehicleId === vehicleId) && (kind === 'all' || e.kind === kind)),
@@ -42,9 +31,7 @@ export default function HistoryPage() {
   )
   const filteredTotal = useMemo(() => filtered.reduce((sum, e) => sum + e.amount, 0), [filtered])
 
-  if (loadingVehicles || loadingRecords || loadingFuel || loadingExpenses) return <Spinner />
-
-  const error = vehiclesError ?? recordsError ?? fuelError ?? expensesError
+  if (loading) return <Spinner />
 
   return (
     <div className="space-y-6">
@@ -64,7 +51,7 @@ export default function HistoryPage() {
           <p className="mt-1 max-w-sm text-sm text-pine-600">Registra un vehículo para empezar a llevar su historial.</p>
           <Link to="/app/vehicles?new=1" className="btn-primary mt-6">Registrar mi primer vehículo</Link>
         </section>
-      ) : timeline.length === 0 ? (
+      ) : fullTimeline.length === 0 ? (
         <section className="card flex flex-col items-center px-6 py-14 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pine-50 text-emerald-600">
             <History className="h-7 w-7" aria-hidden />
@@ -117,6 +104,7 @@ export default function HistoryPage() {
               )}
             </>
           )}
+          <HiddenHistoryNotice count={hiddenCount} cutoff={cutoff} />
         </>
       )}
     </div>

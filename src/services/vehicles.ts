@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { planError } from '../lib/plan'
 import type { Vehicle, VehicleInput } from '../types/app'
 
 /** Normaliza el texto del formulario antes de guardarlo. */
@@ -13,6 +14,8 @@ function normalize(input: VehicleInput): VehicleInput {
 
 /** Traduce errores de PostgreSQL/PostgREST a mensajes entendibles. */
 function toFriendlyError(error: { code?: string; message: string }): Error {
+  const limitError = planError(error)
+  if (limitError) return limitError
   if (error.code === '23505') {
     return new Error('Ya tienes un vehículo activo con esa placa.')
   }

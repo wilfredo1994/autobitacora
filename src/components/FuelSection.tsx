@@ -7,6 +7,8 @@ import { FUEL_TYPE_LABELS, FUEL_UNIT_LABELS, type FuelInput, type FuelRecord, ty
 import FuelForm from './FuelForm'
 import FuelList from './FuelList'
 import ConfirmDialog from './ConfirmDialog'
+import { HiddenHistoryNotice } from './PremiumNotice'
+import { hiddenRecordNote, isVisible } from '../lib/plan'
 
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: FuelRecord }
 
@@ -16,9 +18,13 @@ interface Props {
   onNotice: (message: string | null) => void
   onError: (message: string | null) => void
   reload: () => Promise<void>
+  /** El plan no permite editar este vehículo: sin altas, ediciones ni archivado. */
+  readOnly: boolean
+  /** Primer día visible del historial (plan Free); null = completo. */
+  cutoff: string | null
 }
 
-export default function FuelSection({ vehicle, records, onNotice, onError, reload }: Props) {
+export default function FuelSection({ vehicle, records, onNotice, onError, reload, readOnly, cutoff }: Props) {
   const [form, setForm] = useState<FormState>({ mode: 'closed' })
   const [toArchive, setToArchive] = useState<FuelRecord | null>(null)
   const [archiving, setArchiving] = useState(false)
@@ -26,6 +32,8 @@ export default function FuelSection({ vehicle, records, onNotice, onError, reloa
   const closeForm = useCallback(() => setForm({ mode: 'closed' }), [])
 
   const history = useMemo(() => sortFuelHistory(records), [records])
+  // Los cálculos (consumo, costos) usan todas las cargas; la lista, solo las visibles con el plan.
+  const visible = useMemo(() => history.filter((r) => isVisible(r.fuel_date, cutoff)), [history, cutoff])
   const totals = useMemo(() => summarizeFuel(records), [records])
   const segments = useMemo(() => buildSegments(records), [records])
   const efficiency = useMemo(() => buildEfficiency(segments), [segments])
@@ -35,10 +43,10 @@ export default function FuelSection({ vehicle, records, onNotice, onError, reloa
   async function handleSubmit(input: FuelInput) {
     if (form.mode === 'edit') {
       await updateFuel(form.record.id, input)
-      onNotice('Carga actualizada.')
+      onNotice(`Carga actualizada.${hiddenRecordNote(input.fuel_date, cutoff)}`)
     } else {
       await createFuel(vehicle.id, input)
-      onNotice('Carga registrada.')
+      onNotice(`Carga registrada.${hiddenRecordNote(input.fuel_date, cutoff)}`)
     }
     onError(null)
     closeForm()
@@ -112,7 +120,7 @@ export default function FuelSection({ vehicle, records, onNotice, onError, reloa
       <section className="space-y-3" aria-label="Historial de combustible">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-pine-900">Historial de combustible</h2>
-          {history.length > 0 && (
+          {history.length > 0 && !readOnly && (
             <button type="button" className="btn-primary" onClick={() => { onNotice(null); setForm({ mode: 'create' }) }}>
               <Plus className="h-4 w-4" aria-hidden />
               Registrar carga
@@ -128,18 +136,23 @@ export default function FuelSection({ vehicle, records, onNotice, onError, reloa
             <p className="mt-1 max-w-sm text-sm text-pine-600">
               Llena el tanque y anota el kilometraje. Desde la segunda carga de tanque lleno verás tu consumo y costo por km.
             </p>
-            <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
-              <Plus className="h-4 w-4" aria-hidden />
-              Registrar la primera
-            </button>
+            {!readOnly && (
+              <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
+                <Plus className="h-4 w-4" aria-hidden />
+                Registrar la primera
+              </button>
+            )}
           </div>
         ) : (
-          <FuelList
-            records={history}
-            efficiency={perRecord}
-            onEdit={(record) => { onNotice(null); setForm({ mode: 'edit', record }) }}
-            onArchive={setToArchive}
-          />
+          <>
+            <FuelList
+              records={visible}
+              efficiency={perRecord}
+              onEdit={readOnly ? undefined : (record) => { onNotice(null); setForm({ mode: 'edit', record }) }}
+              onArchive={readOnly ? undefined : setToArchive}
+            />
+            <HiddenHistoryNotice count={history.length - visible.length} cutoff={cutoff} />
+          </>
         )}
       </section>
 
