@@ -7,6 +7,8 @@ import type { Expense, ExpenseInput, Vehicle } from '../types/app'
 import ExpenseForm from './ExpenseForm'
 import ExpenseList from './ExpenseList'
 import ConfirmDialog from './ConfirmDialog'
+import { HiddenHistoryNotice } from './PremiumNotice'
+import { hiddenRecordNote, isVisible } from '../lib/plan'
 
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: Expense }
 
@@ -16,9 +18,13 @@ interface Props {
   onNotice: (message: string | null) => void
   onError: (message: string | null) => void
   reload: () => Promise<void>
+  /** El plan no permite editar este vehículo: sin altas, ediciones ni archivado. */
+  readOnly: boolean
+  /** Primer día visible del historial (plan Free); null = completo. */
+  cutoff: string | null
 }
 
-export default function ExpenseSection({ vehicle, records, onNotice, onError, reload }: Props) {
+export default function ExpenseSection({ vehicle, records, onNotice, onError, reload, readOnly, cutoff }: Props) {
   const [form, setForm] = useState<FormState>({ mode: 'closed' })
   const [toArchive, setToArchive] = useState<Expense | null>(null)
   const [archiving, setArchiving] = useState(false)
@@ -26,15 +32,16 @@ export default function ExpenseSection({ vehicle, records, onNotice, onError, re
   const closeForm = useCallback(() => setForm({ mode: 'closed' }), [])
 
   const history = useMemo(() => sortExpenseHistory(records), [records])
+  const visible = useMemo(() => history.filter((r) => isVisible(r.expense_date, cutoff)), [history, cutoff])
   const totals = useMemo(() => summarizeExpenses(records), [records])
 
   async function handleSubmit(input: ExpenseInput) {
     if (form.mode === 'edit') {
       await updateExpense(form.record.id, input)
-      onNotice('Gasto actualizado.')
+      onNotice(`Gasto actualizado.${hiddenRecordNote(input.expense_date, cutoff)}`)
     } else {
       await createExpense(vehicle.id, input)
-      onNotice('Gasto registrado.')
+      onNotice(`Gasto registrado.${hiddenRecordNote(input.expense_date, cutoff)}`)
     }
     onError(null)
     closeForm()
@@ -87,7 +94,7 @@ export default function ExpenseSection({ vehicle, records, onNotice, onError, re
       <section className="space-y-3" aria-label="Historial de otros gastos">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-pine-900">Otros gastos</h2>
-          {history.length > 0 && (
+          {history.length > 0 && !readOnly && (
             <button type="button" className="btn-primary" onClick={() => { onNotice(null); setForm({ mode: 'create' }) }}>
               <Plus className="h-4 w-4" aria-hidden />
               Registrar gasto
@@ -103,17 +110,22 @@ export default function ExpenseSection({ vehicle, records, onNotice, onError, re
             <p className="mt-1 max-w-sm text-sm text-pine-600">
               SOAT, seguro, impuesto vehicular, peajes, estacionamiento… Anótalos para conocer el costo real de tu vehículo.
             </p>
-            <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
-              <Plus className="h-4 w-4" aria-hidden />
-              Registrar el primero
-            </button>
+            {!readOnly && (
+              <button type="button" className="btn-primary mt-5" onClick={() => setForm({ mode: 'create' })}>
+                <Plus className="h-4 w-4" aria-hidden />
+                Registrar el primero
+              </button>
+            )}
           </div>
         ) : (
-          <ExpenseList
-            records={history}
-            onEdit={(record) => { onNotice(null); setForm({ mode: 'edit', record }) }}
-            onArchive={setToArchive}
-          />
+          <>
+            <ExpenseList
+              records={visible}
+              onEdit={readOnly ? undefined : (record) => { onNotice(null); setForm({ mode: 'edit', record }) }}
+              onArchive={readOnly ? undefined : setToArchive}
+            />
+            <HiddenHistoryNotice count={history.length - visible.length} cutoff={cutoff} />
+          </>
         )}
       </section>
 

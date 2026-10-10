@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Archive, History, Pencil, Plus } from 'lucide-react'
 import { useVehicles } from '../hooks/useVehicles'
@@ -8,6 +8,9 @@ import Spinner from '../components/Spinner'
 import Alert from '../components/Alert'
 import VehicleCard from '../components/VehicleCard'
 import VehicleForm from '../components/VehicleForm'
+import PremiumNotice from '../components/PremiumNotice'
+import { usePlan } from '../plan/PlanProvider'
+import { writableVehicleIds } from '../lib/plan'
 
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; vehicle: Vehicle }
 
@@ -19,14 +22,18 @@ export default function VehiclesPage() {
   const [archiving, setArchiving] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const { plan, isPremium, reload: reloadPlan } = usePlan()
+
+  const atLimit = vehicles.length >= plan.vehicle_limit
+  const writable = useMemo(() => writableVehicleIds(vehicles, plan.vehicle_limit), [vehicles, plan.vehicle_limit])
 
   // /app/vehicles?new=1 abre el formulario de creación (CTA del dashboard vacío)
   useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      setForm({ mode: 'create' })
+    if (searchParams.get('new') === '1' && !loading) {
+      if (!atLimit) setForm({ mode: 'create' })
       setSearchParams({}, { replace: true })
     }
-  }, [searchParams, setSearchParams])
+  }, [searchParams, setSearchParams, loading, atLimit])
 
   const closeForm = useCallback(() => setForm({ mode: 'closed' }), [])
 
@@ -40,7 +47,7 @@ export default function VehiclesPage() {
     }
     setActionError(null)
     closeForm()
-    await reload()
+    await Promise.all([reload(), reloadPlan()])
   }
 
   async function confirmArchive() {
@@ -51,7 +58,7 @@ export default function VehiclesPage() {
       await archiveVehicle(toArchive.id)
       setNotice(`${toArchive.brand} ${toArchive.model} fue archivado.`)
       setToArchive(null)
-      await reload()
+      await Promise.all([reload(), reloadPlan()])
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'No se pudo archivar el vehículo.')
       setToArchive(null)
@@ -67,11 +74,25 @@ export default function VehiclesPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-pine-900 sm:text-3xl">Vehículos</h1>
           <p className="mt-1 text-pine-600">Registra y administra los vehículos de tu bitácora.</p>
         </div>
-        <button type="button" className="btn-primary" onClick={() => { setNotice(null); setForm({ mode: 'create' }) }}>
-          <Plus className="h-4 w-4" aria-hidden />
-          Registrar vehículo
-        </button>
+        {!atLimit && (
+          <button type="button" className="btn-primary" onClick={() => { setNotice(null); setForm({ mode: 'create' }) }}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Registrar vehículo
+          </button>
+        )}
       </div>
+
+      {!loading && atLimit && (
+        isPremium ? (
+          <Alert kind="warning">
+            Llegaste al máximo de {plan.vehicle_limit} vehículos activos de Premium. Archiva uno para registrar otro.
+          </Alert>
+        ) : (
+          <PremiumNotice title={`Tu plan Free incluye ${plan.vehicle_limit} vehículo activo`}>
+            Con Premium registras hasta 5. Si vendiste tu vehículo, archívalo para registrar el nuevo.
+          </PremiumNotice>
+        )
+      )}
 
       {notice && <Alert kind="success">{notice}</Alert>}
       {(error || actionError) && <Alert>{error ?? actionError}</Alert>}
@@ -89,16 +110,19 @@ export default function VehiclesPage() {
             <VehicleCard
               key={v.id}
               vehicle={v}
+              readOnly={!writable.has(v.id)}
               actions={
                 <>
                   <Link to={`/app/vehicles/${v.id}`} className="btn-primary !px-3 !py-2">
                     <History className="h-4 w-4" aria-hidden />
                     Historial
                   </Link>
-                  <button type="button" className="btn-secondary !px-3 !py-2" onClick={() => { setNotice(null); setForm({ mode: 'edit', vehicle: v }) }}>
-                    <Pencil className="h-4 w-4" aria-hidden />
-                    Editar
-                  </button>
+                  {writable.has(v.id) && (
+                    <button type="button" className="btn-secondary !px-3 !py-2" onClick={() => { setNotice(null); setForm({ mode: 'edit', vehicle: v }) }}>
+                      <Pencil className="h-4 w-4" aria-hidden />
+                      Editar
+                    </button>
+                  )}
                   <button type="button" className="btn-secondary !px-3 !py-2" onClick={() => setToArchive(v)}>
                     <Archive className="h-4 w-4" aria-hidden />
                     Archivar

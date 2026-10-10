@@ -4,17 +4,22 @@ import { summarizeHistory, type HistoryEntry } from '../lib/history'
 import { formatMoney } from '../lib/format'
 import HistoryList from './HistoryList'
 import HistoryKindFilter, { type KindFilter } from './HistoryKindFilter'
+import { HiddenHistoryNotice } from './PremiumNotice'
+import { isVisible } from '../lib/plan'
 
 interface Props {
   /** Movimientos del vehículo, ya ordenados (buildHistory). */
   entries: HistoryEntry[]
+  /** Primer día visible del historial (plan Free); null = completo. Los totales usan todo. */
+  cutoff: string | null
 }
 
 /** Pestaña "Historial" del vehículo: costo total y línea de tiempo de todos sus movimientos. */
-export default function VehicleHistorySection({ entries }: Props) {
+export default function VehicleHistorySection({ entries, cutoff }: Props) {
   const [kind, setKind] = useState<KindFilter>('all')
   const totals = useMemo(() => summarizeHistory(entries), [entries])
-  const visible = useMemo(() => (kind === 'all' ? entries : entries.filter((e) => e.kind === kind)), [entries, kind])
+  const inWindow = useMemo(() => entries.filter((e) => isVisible(e.date, cutoff)), [entries, cutoff])
+  const visible = useMemo(() => (kind === 'all' ? inWindow : inWindow.filter((e) => e.kind === kind)), [inWindow, kind])
 
   const breakdown = (period: 'total' | 'thisYear' | 'thisMonth') =>
     `Mantenimiento ${formatMoney(totals.byKind.maintenance[period])} · Combustible ${formatMoney(totals.byKind.fuel[period])} · Otros ${formatMoney(totals.byKind.expense[period])}`
@@ -61,6 +66,7 @@ export default function VehicleHistorySection({ entries }: Props) {
         ) : (
           <HistoryList entries={visible} />
         )}
+        <HiddenHistoryNotice count={entries.length - inWindow.length} cutoff={cutoff} />
       </section>
     </>
   )

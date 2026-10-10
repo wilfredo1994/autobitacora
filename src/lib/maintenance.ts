@@ -1,18 +1,13 @@
-import { daysBetween, todayISO } from './format'
+import { todayISO } from './format'
+import { compareDue, computeDue, type DueInfo, type DueStatus } from './due'
 import type { MaintenanceRecord } from '../types/app'
 
-export type UpcomingStatus = 'overdue' | 'soon' | 'ok'
+export type UpcomingStatus = DueStatus
 
 /** Un mantenimiento pendiente, derivado de next_date / next_mileage del último servicio de su tipo. */
-export interface UpcomingItem {
+export interface UpcomingItem extends DueInfo {
   record: MaintenanceRecord
-  status: UpcomingStatus
-  daysRemaining: number | null // negativo = vencido
-  kmRemaining: number | null // <= 0 = excedido
 }
-
-const SOON_DAYS = 30
-const SOON_KM = 500
 
 function sortNewestFirst(a: MaintenanceRecord, b: MaintenanceRecord): number {
   if (a.service_date !== b.service_date) return a.service_date < b.service_date ? 1 : -1
@@ -26,7 +21,6 @@ function sortNewestFirst(a: MaintenanceRecord, b: MaintenanceRecord): number {
  * el "próximo" del anterior queda reemplazado y no genera una alerta falsa.
  */
 export function buildUpcoming(records: MaintenanceRecord[], currentMileage: number): UpcomingItem[] {
-  const today = todayISO()
   const latestByType = new Map<string, MaintenanceRecord>()
 
   for (const r of [...records].sort(sortNewestFirst)) {
@@ -38,24 +32,10 @@ export function buildUpcoming(records: MaintenanceRecord[], currentMileage: numb
   for (const record of latestByType.values()) {
     if (record.next_date == null && record.next_mileage == null) continue
 
-    const daysRemaining = record.next_date != null ? daysBetween(today, record.next_date) : null
-    const kmRemaining = record.next_mileage != null ? record.next_mileage - currentMileage : null
-
-    const overdue = (daysRemaining !== null && daysRemaining < 0) || (kmRemaining !== null && kmRemaining <= 0)
-    const soon =
-      (daysRemaining !== null && daysRemaining <= SOON_DAYS) || (kmRemaining !== null && kmRemaining <= SOON_KM)
-
-    items.push({ record, status: overdue ? 'overdue' : soon ? 'soon' : 'ok', daysRemaining, kmRemaining })
+    items.push({ record, ...computeDue(record.next_date, record.next_mileage, currentMileage) })
   }
 
-  const rank: Record<UpcomingStatus, number> = { overdue: 0, soon: 1, ok: 2 }
-  return items.sort((a, b) => {
-    if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
-    const da = a.daysRemaining ?? Number.POSITIVE_INFINITY
-    const db = b.daysRemaining ?? Number.POSITIVE_INFINITY
-    if (da !== db) return da - db
-    return (a.kmRemaining ?? Number.POSITIVE_INFINITY) - (b.kmRemaining ?? Number.POSITIVE_INFINITY)
-  })
+  return items.sort(compareDue)
 }
 
 export interface MaintenanceTotals {

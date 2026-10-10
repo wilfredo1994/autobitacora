@@ -19,6 +19,11 @@ export function formatDate(iso: string): string {
   return parseISODate(iso).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** Fecha local de un TIMESTAMPTZ (p. ej. completed_at); no recortar el ISO, que viene en UTC. */
+export function formatTimestampDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 /** Fecha de hoy en formato 'YYYY-MM-DD' según la zona horaria del usuario. */
 export function todayISO(): string {
   const now = new Date()

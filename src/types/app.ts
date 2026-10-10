@@ -179,3 +179,67 @@ export interface ExpenseInput {
   amount: number
   mileage: number | null
 }
+
+export type ReminderStatus = 'pending' | 'completed' | 'dismissed'
+
+export const REMINDER_STATUS_LABELS: Record<ReminderStatus, string> = {
+  pending: 'Pendiente',
+  completed: 'Completado',
+  dismissed: 'Descartado',
+}
+
+/** Sugerencias para el título del recordatorio (el usuario puede escribir otro). */
+export const REMINDER_SUGGESTIONS = [
+  'Renovar SOAT',
+  'Revisión técnica',
+  'Pagar impuesto vehicular',
+  'Renovar seguro vehicular',
+  'Renovar licencia de conducir',
+  'Cambio de aceite',
+  'Rotación de llantas',
+  'Cambio de batería',
+]
+
+/** Fila de public.reminders. */
+export interface Reminder {
+  id: string
+  vehicle_id: string
+  title: string
+  description: string | null
+  due_date: string | null // 'YYYY-MM-DD'
+  due_mileage: number | null
+  status: ReminderStatus
+  completed_at: string | null // lo sincroniza la BD según status
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+export type SubscriptionPlan = 'free' | 'premium'
+export type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'expired'
+
+/** Resultado de supabase.rpc('get_my_plan') (migración 004). null en los límites = ilimitado. */
+export interface PlanInfo {
+  /** Plan efectivo hoy (considera vencimiento y días de gracia). */
+  plan: SubscriptionPlan
+  /** Plan contratado en subscriptions, aunque haya vencido. */
+  subscribed_plan: SubscriptionPlan
+  status: SubscriptionStatus
+  expires_at: string | null
+  /** Solo si está usando los 7 días de gracia tras un cobro fallido. */
+  grace_until: string | null
+  vehicle_limit: number
+  reminder_limit: number | null
+  history_months: number | null
+  /** Uso actual, contado igual que en los triggers de límite. */
+  active_vehicles: number
+  pending_reminders: number
+}
+
+/** Datos del formulario de recordatorio (vehicle_id se pasa aparte; debe haber fecha o km). */
+export interface ReminderInput {
+  title: string
+  description: string | null
+  due_date: string | null
+  due_mileage: number | null
+}

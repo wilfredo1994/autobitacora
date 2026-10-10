@@ -1,7 +1,10 @@
 import { supabase } from '../lib/supabase'
+import { planError } from '../lib/plan'
 import type { Expense, ExpenseInput } from '../types/app'
 
 function toFriendlyError(error: { code?: string; message: string }): Error {
+  const limitError = planError(error)
+  if (limitError) return limitError
   if (error.code === '23514') {
     return new Error('Revisa los datos: la fecha, la categoría, el monto o el kilometraje no son válidos.')
   }

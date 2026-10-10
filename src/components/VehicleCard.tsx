@@ -5,7 +5,8 @@ import { VEHICLE_TYPE_LABELS, type Vehicle } from '../types/app'
 
 const kmFormatter = new Intl.NumberFormat('es-PE')
 
-export default function VehicleCard({ vehicle, actions }: { vehicle: Vehicle; actions?: ReactNode }) {
+/** readOnly: el plan actual no permite editar este vehículo (se muestra una etiqueta). */
+export default function VehicleCard({ vehicle, actions, readOnly }: { vehicle: Vehicle; actions?: ReactNode; readOnly?: boolean }) {
   return (
     <article className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-4">
@@ -29,6 +30,9 @@ export default function VehicleCard({ vehicle, actions }: { vehicle: Vehicle; ac
               <Gauge className="h-4 w-4 text-emerald-600" aria-hidden />
               {kmFormatter.format(vehicle.current_mileage)} km
             </span>
+            {readOnly && (
+              <span className="rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">Solo lectura</span>
+            )}
           </div>
         </div>
       </div>
